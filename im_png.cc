@@ -3,6 +3,7 @@
 //------------------------------------------------------------------------
 //
 //  Copyright (c) 2008  Andrew J Apted
+//  Copyright (c) 2015  Anton Leontiev
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -24,9 +25,8 @@
 
 // workaround for some weirdness in pngconf.h
 #undef _SETJMP_H
-
 #include <png.h>
-
+#include <zlib.h>
 
 #define CHECK_PNG_BYTES  4
 
@@ -83,7 +83,7 @@ rgb_image_c *PNG_Load(FILE *fp)
   /* set error handling since we are using the setjmp/longjmp method
    * (this is the normal method of doing things with libpng).
    */
-  if (setjmp(png_ptr->jmpbuf))
+  if (setjmp(png_jmpbuf(png_ptr)))
   {
     printf("PNG_Load : Error loading PNG image!\n");
     goto failed;
@@ -229,7 +229,7 @@ bool PNG_Save(FILE *fp, rgb_image_c *img, int compress)
   /* set error handling since we are using the setjmp/longjmp method
    * (this is the normal method of doing things with libpng).
    */
-  if (setjmp(png_ptr->jmpbuf))
+  if (setjmp(png_jmpbuf(png_ptr)))
   {
     printf("PNG_Save : Error saving PNG image!\n");
     goto failed;
