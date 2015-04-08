@@ -23,7 +23,9 @@
 #include <algorithm>
 
 #include "archive.h"
+#include "arc_spec.h"
 #include "pakfile.h"
+#include "im_mip.h"
 #include "q1_structs.h"
 
 
@@ -150,6 +152,22 @@ bool ARC_ExtractOneFile(int entry, const char *name)
     return false;
 
 
+  ARC_CreateNeededDirs(filename);
+
+
+  if (! opt_raw)
+  {
+    int result = ARC_TryExtractSpecial(entry, name, filename);
+
+    if (result != ARCSP_Normal)
+    {
+      StringFree(filename);
+
+      return (result != ARCSP_Failed);
+    }
+  }
+
+
   if (FileExists(filename) && ! opt_force)
   {
     printf("FAILURE: will not overwrite file: %s\n\n", filename);
@@ -157,16 +175,6 @@ bool ARC_ExtractOneFile(int entry, const char *name)
     StringFree(filename);
     return false;
   }
-
-  if (! ARC_CreateNeededDirs(filename))
-  {
-#if 0
-    // error message displayed by ARC_CreateNeededDirs()
-    StringFree(filename);
-    return false;
-#endif
-  }
-
 
   int entry_len = PAK_EntryLen(entry);
 
@@ -208,6 +216,7 @@ bool ARC_ExtractOneFile(int entry, const char *name)
     printf("FAILURE: cannot create output file: %s\n\n", filename);
     failed = true;
   }
+
 
   StringFree(filename);
 
@@ -345,8 +354,6 @@ void ARC_StoreFile(const char *path,
     return;
   }
 
-  all_pak_lumps[lump_name] = 1;
-
 
   FILE *fp = fopen(path, "rb");
   if (! fp)
@@ -361,7 +368,31 @@ void ARC_StoreFile(const char *path,
     return;
   }
 
+
+  if (! opt_raw)
+  {
+    int result = ARC_TryStoreSpecial(fp, lump_name, path);
+
+    if (result != ARCSP_Normal)
+    {
+      fclose(fp);
+      StringFree(lump_name);
+
+      if (result == ARCSP_Success)
+        (*num_pack) += 1;
+      else if (result == ARCSP_Ignored)
+        (*skipped)  += 1;
+      else
+        (*failures) += 1;
+
+      return;
+    }
+  }
+
+
   PAK_NewLump(lump_name);
+
+  all_pak_lumps[lump_name] = 1;
 
   StringFree(lump_name);
 
@@ -468,6 +499,14 @@ void ARC_ProcessPath(const char *path,
       return;
     }
 
+    if (StringCaseCmp(FindBaseName(path), ".svn") == 0 ||
+        StringCaseCmp(FindBaseName(path), "CVS")  == 0)
+    {
+      printf("SKIPPING REPOSITORY CRAP: %s\n", path);
+      (*skipped) += 1;
+      return;
+    }
+
     printf("\n");
     printf("Processing directory: %s\n", path);
 
@@ -482,11 +521,28 @@ void ARC_ProcessPath(const char *path,
     {
       printf("(empty directory)\n\n");
     }
+
+    return;
   }
-  else
+
+
+  if (CheckExtension(path, "pak"))
   {
-    ARC_StoreFile(path, num_pack, failures, skipped);
+    // TODO
+    printf("MERGING PAKS NOT IMPLEMENTED: %s\n", path);
+    (*failures) += 1;
+    return;
   }
+
+  if (CheckExtension(path, "ana") || CheckExtension(path, "gen"))
+  {
+    printf("SKIPPING ANALYSIS or GENERATOR: %s\n", path);
+    (*skipped) += 1;
+    return;
+  }
+
+
+  ARC_StoreFile(path, num_pack, failures, skipped);
 }
 
 

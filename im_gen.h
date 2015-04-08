@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-//  Global Vars
+//  Generation of Special files
 //------------------------------------------------------------------------
 //
 //  Copyright (c) 2008  Andrew J Apted
@@ -16,34 +16,12 @@
 //
 //------------------------------------------------------------------------
 
-#ifndef __QPAKMAN_MAIN_H__
-#define __QPAKMAN_MAIN_H__
+#ifndef __GENERATE_SPECIAL_H__
+#define __GENERATE_SPECIAL_H__
 
+bool GEN_TryCreateSpecial(const char *filename);
 
-typedef enum
-{
-  GAME_Quake1   = 0,
-  GAME_Quake2   = 1,
-  GAME_Hexen2   = 2,
-  GAME_Haktoria = 3,
-}
-game_kind_e;
-
-extern game_kind_e game_type;
-
-extern std::string color_name;
-
-
-extern bool opt_force;
-extern bool opt_picture;
-extern bool opt_raw;
-extern bool opt_dither;
-
-
-void FatalError(const char *str, ...);
-
-
-#endif // __QPAKMAN_MAIN_H__
+#endif  /* __GENERATE_SPECIAL_H__ */
 
 //--- editor settings ---
 // vi:ts=2:sw=2:expandtab

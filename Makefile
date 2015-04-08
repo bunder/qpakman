@@ -25,10 +25,12 @@ OBJS=	u_assert.o \
 	u_util.o   \
 	im_color.o \
 	im_image.o \
+	im_gen.o   \
 	im_mip.o   \
 	im_png.o   \
 	im_tex.o   \
 	archive.o  \
+	arc_spec.o \
 	pakfile.o  \
 	main.o
 

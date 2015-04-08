@@ -173,9 +173,12 @@ std::string MIP_FileToLumpName(const char *filename, bool * fullbright)
 }
 
 
-void MIP_ConvertImage(rgb_image_c *img)
+void MIP_ConvertImage(rgb_image_c *img, bool dither = false)
 {
   byte *line_buf = new byte[img->width];
+  s16_t *err_buf = new s16_t[img->width * 3];
+
+  memset(err_buf, 0, sizeof(s16_t) * img->width * 3);
 
   for (int y = 0; y < img->height; y++)
   {
@@ -184,15 +187,62 @@ void MIP_ConvertImage(rgb_image_c *img)
 
     byte *dest = line_buf;
 
-    for (; src < src_e; src++)
+    if (dither)
     {
-      *dest++ = COL_MapColor(*src);
+      s16_t *errs = err_buf;
+
+      s16_t r = 0;
+      s16_t g = 0;
+      s16_t b = 0;
+
+      for (; src < src_e; src++)
+      {
+        // add error from previous line
+        r = (r + errs[0]) >> 1;
+        g = (g + errs[1]) >> 1;
+        b = (b + errs[2]) >> 1;
+
+        r += RGB_R(*src);
+        g += RGB_G(*src);
+        b += RGB_B(*src);
+
+        byte alpha = RGB_A(*src);
+
+        // clamp result
+        if (r & 0xF00) r = (r < 0) ? 0 : 255;
+        if (g & 0xF00) g = (g < 0) ? 0 : 255;
+        if (b & 0xF00) b = (b < 0) ? 0 : 255;
+
+        // store pixel
+        byte pix = COL_MapColor(MAKE_RGBA(r, g, b, alpha));
+
+        *dest++ = pix;
+
+        // determine new error
+        u32_t got = COL_ReadPalette(pix);
+
+        r -= RGB_R(got);
+        g -= RGB_G(got);
+        b -= RGB_B(got);
+
+        *errs++ = r;
+        *errs++ = g;
+        *errs++ = b;
+      }
+    }
+    else
+    {
+      for (; src < src_e; src++)
+      {
+        *dest++ = COL_MapColor(*src);
+      }
     }
 
     WAD2_AppendData(line_buf, img->width);
   }
 
   delete[] line_buf;
+  delete[] err_buf;
 }
 
 
@@ -338,7 +388,7 @@ bool MIP_ProcessImage(const char *filename)
 
 
   // now the actual textures
-  MIP_ConvertImage(img);
+  MIP_ConvertImage(img, opt_dither);
 
   for (int mip = 1; mip < MIP_LEVELS; mip++)
   {
@@ -346,7 +396,7 @@ bool MIP_ProcessImage(const char *filename)
 
     delete img; img = tmp;
 
-    MIP_ConvertImage(img);
+    MIP_ConvertImage(img, true);
   }
 
   WAD2_FinishLump();
@@ -523,7 +573,7 @@ bool MIP_ExtractMipTex(int entry, const char *lump_name)
   if (! WAD2_ReadData(entry, (int)sizeof(mm_tex), width * height, pixels))
   {
     printf("FAILURE: could not read %dx%d pixels from miptex\n\n", width, height);
-    delete pixels;
+    delete[] pixels;
     return false;
   }
 
@@ -553,8 +603,8 @@ bool MIP_ExtractMipTex(int entry, const char *lump_name)
 
   bool result = Do_SaveImage(img, lump_name, fullbright);
 
-  delete img;
-  delete pixels;
+  delete   img;
+  delete[] pixels;
 
   return result;
 }
@@ -585,7 +635,7 @@ bool MIP_ExtractPicture(int entry, const char *lump_name)
   if (! WAD2_ReadData(entry, (int)sizeof(pic), width * height, pixels))
   {
     printf("FAILURE: could not read %dx%d pixels from picture\n\n", width, height);
-    delete pixels;
+    delete[] pixels;
     return false;
   }
 
@@ -604,8 +654,8 @@ bool MIP_ExtractPicture(int entry, const char *lump_name)
 
   bool result = Do_SaveImage(img, lump_name, false /* fullbright */);
 
-  delete img;
-  delete pixels;
+  delete   img;
+  delete[] pixels;
 
   return result;
 }
@@ -650,7 +700,7 @@ bool MIP_ExtractRawBlock(int entry, const char *lump_name)
   if (! WAD2_ReadData(entry, 0, width * height, pixels))
   {
     printf("FAILURE: could not read %dx%d pixels from picture\n\n", width, height);
-    delete pixels;
+    delete[] pixels;
     return false;
   }
 
@@ -669,8 +719,8 @@ bool MIP_ExtractRawBlock(int entry, const char *lump_name)
 
   bool result = Do_SaveImage(img, lump_name, false /* fullbright */);
 
-  delete img;
-  delete pixels;
+  delete   img;
+  delete[] pixels;
 
   return result;
 }
@@ -734,6 +784,97 @@ void MIP_ExtractWAD(const char *filename)
 
   printf("Extracted %d entries, with %d failures\n",
          num_lumps - failures - skipped, failures);
+}
+
+
+//------------------------------------------------------------------------
+
+
+bool MIP_DecodeWAL(int entry, const char *filename)
+{
+  wal_header_t wal;
+
+  if (! PAK_ReadData(entry, 0, (int)sizeof(wal), &wal))
+  {
+    printf("FAILURE: could not read WAL header!\n\n");
+    return false;
+  }
+
+  // (We ignore the internal name)
+
+  int width  = LE_U32(wal.width);
+  int height = LE_U32(wal.height);
+  int offset = LE_U32(wal.offsets[0]);
+
+  if (width  < 8 || width  > 4096 ||
+      height < 8 || height > 4096)
+  {
+    printf("FAILURE: weird size of image: %dx%d\n\n", width, height);
+    return false;
+  }
+
+  int total = PAK_EntryLen(entry);
+
+  if (offset < 80 || offset > total - width*height*85/64)
+  {
+    printf("FAILURE: invalid offset in WAL header (0x%08x)\n", offset);
+    return false;
+  }
+
+  byte *pixels = new byte[width * height];
+
+  if (! PAK_ReadData(entry, offset, width * height, pixels))
+  {
+    printf("FAILURE: could not read %dx%d pixels from WAL\n\n", width, height);
+    delete[] pixels;
+    return false;
+  }
+
+  // create the image for saving.
+  COL_SetFullBright(true);
+
+  rgb_image_c *img = new rgb_image_c(width, height);
+
+  for (int y = 0; y < height; y++)
+  for (int x = 0; x < width;  x++)
+  {
+    byte pix = pixels[y*width + x];
+
+    img->PixelAt(x, y) = COL_ReadPalette(pix);
+  }
+
+  delete[] pixels;
+
+
+  // TODO: transparent bits and/or SKY
+
+
+  FILE *fp = fopen(filename, "wb");
+
+  if (! fp)
+  {
+    printf("FAILURE: cannot create output file: %s\n\n", filename);
+
+    delete img;
+    return false;
+  }
+
+  bool result = PNG_Save(fp, img);
+
+  fclose(fp);
+
+  delete img;
+
+  if (! result)
+    printf("FAILURE: error while writing PNG file\n\n");
+
+  return result;
+}
+
+
+void MIP_EncodeWAL(const char *filename)
+{
+  FatalError("MIP_EncodeWAL: not yet implemented.\n");
 }
 
 //--- editor settings ---

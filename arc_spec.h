@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-//  Global Vars
+//  Special Archiving
 //------------------------------------------------------------------------
 //
 //  Copyright (c) 2008  Andrew J Apted
@@ -16,34 +16,22 @@
 //
 //------------------------------------------------------------------------
 
-#ifndef __QPAKMAN_MAIN_H__
-#define __QPAKMAN_MAIN_H__
-
+#ifndef __ARCHIVE_SPECIAL_H__
+#define __ARCHIVE_SPECIAL_H__
 
 typedef enum
 {
-  GAME_Quake1   = 0,
-  GAME_Quake2   = 1,
-  GAME_Hexen2   = 2,
-  GAME_Haktoria = 3,
+  ARCSP_Normal  = 0,  // lump should be handled as normal
+  ARCSP_Success,      // lump was special, successfully (un)packed
+  ARCSP_Failed,       // lump was special, failed to (un)pack
+  ARCSP_Ignored,      // lump was special and was ignored
 }
-game_kind_e;
+arc_special_result_e;
 
-extern game_kind_e game_type;
+int ARC_TryStoreSpecial(FILE *fp, const char *lump, const char *path);
+int ARC_TryExtractSpecial(int entry, const char *lump, const char *path);
 
-extern std::string color_name;
-
-
-extern bool opt_force;
-extern bool opt_picture;
-extern bool opt_raw;
-extern bool opt_dither;
-
-
-void FatalError(const char *str, ...);
-
-
-#endif // __QPAKMAN_MAIN_H__
+#endif  /* __ARCHIVE_SPECIAL_H__ */
 
 //--- editor settings ---
 // vi:ts=2:sw=2:expandtab

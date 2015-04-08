@@ -23,12 +23,13 @@
 
 #include "archive.h"
 #include "im_color.h"
+#include "im_gen.h"
 #include "im_mip.h"
 #include "im_tex.h"
 #include "pakfile.h"
 
 
-#define VERSION  "0.62"
+#define VERSION  "0.66"
 
 
 std::string output_name;
@@ -56,6 +57,7 @@ game_kind_e game_type = GAME_Quake1;
 bool opt_force   = false;
 bool opt_raw     = false;
 bool opt_picture = false;
+bool opt_dither  = false;
 
 
 void FatalError(const char *message, ...)
@@ -100,7 +102,7 @@ void ShowUsage(void)
   printf("   -g  -game   XXX  select game (quake1, quake2, hexen2)\n");
   printf("   -f  -force       overwrite existing files when extracting\n");
   printf("   -p  -pic         create PIC format images in the WAD\n");
-//printf("   -r  -raw         do not convert anything\n");
+  printf("   -r  -raw         do not convert anything\n");
   printf("\n");
 
   printf("This program is free software, under the terms of the GNU General\n");
@@ -193,6 +195,11 @@ int HandleOption(int argc, char **argv)
     {
       game_type = GAME_Hexen2;
     }
+    else if (StringCaseCmp(argv[1], "hak") == 0 ||
+             StringCaseCmp(argv[1], "haktoria") == 0)
+    {
+      game_type = GAME_Haktoria;
+    }
     else
       FatalError("Unknown game type: %s\n", argv[1]);
 
@@ -230,6 +237,8 @@ void Main_Create(void)
     MIP_CreateWAD(filename);
   else if (CheckExtension(filename, "pak"))
     ARC_CreatePAK(filename);
+  else if (GEN_TryCreateSpecial(filename))
+  { /* OK */ }
   else
     FatalError("Unknown output file format: %s\n", output_name.c_str());
 }
