@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.6)
 
 project(QPAKMAN CXX)
 
+find_package(ZLIB REQUIRED)
 find_package(PNG REQUIRED)
 
 add_definitions(${PNG_DEFINITIONS})
