@@ -81,15 +81,16 @@ rgb_image_c *MIP_LoadImage(const char *filename)
   return img;
 }
 
-
-static bool ReplacePrefix(char *name, const char *prefix, char ch)
+// Last character of prefix is the character it represents.
+static bool ReplacePrefix(char *name, const char *prefix)
 {
-  if (strncmp(name, prefix, strlen(prefix)) != 0)
+  int prefix_len = strlen(prefix) - 1;
+  if (strncmp(name, prefix, prefix_len) != 0)
     return false;
 
-  *name++ = ch;
+  *name++ = prefix[prefix_len];
 
-  int move_chars = strlen(prefix) - 1;
+  int move_chars = prefix_len - 1;
 
   if (move_chars > 1)
   {
@@ -102,6 +103,14 @@ static bool ReplacePrefix(char *name, const char *prefix, char ch)
   return true;
 }
 
+static const char * abbr_prefixes[] = {
+  "star_*",
+  "plus_+",
+  "minu_-",
+  "divd_/",
+  NULL
+};
+
 static void ApplyAbbreviations(char *name, bool *fullbright)
 {
   // make it lower case
@@ -112,13 +121,18 @@ static void ApplyAbbreviations(char *name, bool *fullbright)
 
   if (len >= 6)
   {
-       ReplacePrefix(name, "star_", '*')
-    || ReplacePrefix(name, "plus_", '+')
-    || ReplacePrefix(name, "minu_", '-')
-    || ReplacePrefix(name, "divd_", '/');
+    // This used to be a series of logical ORs.
+    // The problem is, at least as of GCC 9.3.0, the side-effects are "lost".
+    // So the second strlen never happened.
+    for (const char ** prefix = abbr_prefixes; *prefix; prefix++)
+    {
+      if (ReplacePrefix(name, *prefix))
+      {
+        len = strlen(name);
+        break;
+      }
+    }
   }
-
-  len = strlen(name);
 
   if (len >= 5 && memcmp(name+len-4, "_fbr", 4) == 0)
   {
